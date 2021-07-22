@@ -1,2 +1,3 @@
 training/
 *.swp
+.DS_Store
