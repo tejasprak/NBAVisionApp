@@ -9,7 +9,7 @@
 ### Setup:
 1. Clone darkflow from [here](https://github.com/thtrieu/darkflow)
 2. Install darkflow: python3 setup.py build_ext --inplace
-3. Download pre-trained weights file [here](https://pjreddie.com/media/files/yolo.weights)
+3. Download pre-trained weights file [here](https://pjreddie.com/media/files/yolo.weights) and place it in yolo/darkflow/bin
 
 ## Pipeline:
 ### 1. preprocessing - extract frames from mp4 using ffmpeg (./get_frames.sh)
