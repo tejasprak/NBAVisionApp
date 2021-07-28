@@ -1,3 +1,9 @@
 training/
 *.swp
 .DS_Store
+yolo/
+frame_extraction/bucks_vs_suns
+frame_extraction/bucks_vs_suns2
+team_classification/out
+videos/bucks_suns.mp4
+yolov4-deepsort

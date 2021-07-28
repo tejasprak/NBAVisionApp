@@ -1,0 +1,286 @@
+import cv2
+import numpy as np
+from sklearn.cluster import dbscan
+
+# Tuning
+
+# Input: A frame of basketball game
+# Output: 
+# 1. A transformation matrix that maps frame coordinate to tactic board coordinate
+# 2. Warped frame
+
+
+def polar2cartesian(rho: float, theta_rad: float, rotate90: bool = False):
+    """
+    Converts line equation from polar to cartesian coordinates
+
+    Args:
+        rho: input line rho
+        theta_rad: input line theta
+        rotate90: output line perpendicular to the input line
+
+    Returns:
+        m: slope of the line
+           For horizontal line: m = 0
+           For vertical line: m = np.nan
+        b: intercept when x=0
+    """
+    x = np.cos(theta_rad) * rho
+    y = np.sin(theta_rad) * rho
+    m = np.nan
+    if not np.isclose(x, 0.0):
+        m = y / x
+    if rotate90:
+        if m is np.nan:
+            m = 0.0
+        elif np.isclose(m, 0.0):
+            m = np.nan
+        else:
+            m = -1.0 / m
+    b = 0.0
+    if m is not np.nan:
+        b = y - m * x
+
+    return m, b
+def intersection(o1, p1, o2, p2, img_size):
+    def minus(p1, p2):
+        return (p1[0] - p2[0], p1[1] - p2[1])
+
+    x = minus(o2, o1)
+    d1 = minus(p1, o1)
+    d2 = minus(p2, o2)
+
+    cross = d1[0] * d2[1] - d1[1] * d2[0]
+    if abs(cross) < 1e-8:
+        return [False, (0, 0)]
+    t1 = (x[0] * d2[1] - x[1] * d2[0]) / cross
+    rx = int(o1[0] + d1[0] * t1)
+    ry = int(o1[1] + d1[1] * t1)
+    tf = False
+    if img_size[1] > rx and rx > 0 and img_size[0] > ry and ry > 0:
+        tf = True
+    return [tf, (rx, ry)]
+
+def getMatrix(img_path, id, baseline, ftline):
+    img = cv2.imread(img_path)
+
+    # mask floor color
+    img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    lower = np.array([95, 50, 50], dtype ="uint8")
+    upper = np.array([115, 255, 255], dtype="uint8")
+    mask = cv2.inRange(img_hsv, lower, upper)
+
+    # erosion and dilation
+    kernel = np.ones((9, 9), np.uint8)
+    mask = cv2.erode(mask, kernel, iterations=3)
+    mask = cv2.dilate(mask, kernel, iterations=3)
+    cv2.imwrite('test.jpg', mask)
+
+    # get edge
+    edges = cv2.Canny(mask,50,150,apertureSize = 3)
+
+    #filter range
+    fil = np.zeros(img.shape[:2], np.uint8)
+    for i in range(int(img.shape[0] / 4), int(img.shape[0] * 3 / 4)):
+        for j in range(int(img.shape[1] * 2 / 3)):
+            fil[i, j] = 255
+    edges = cv2.bitwise_and(edges, edges, mask=fil)
+    cv2.imwrite('edge.jpg', edges)
+
+    # calculate Hough lines
+    lines = cv2.HoughLines(edges,1,np.pi/180, 100)
+    lines_points = []
+    for i in range(20):
+        lines_points.append(baseline)
+        lines_points.append(ftline)
+    cv2.line(img, baseline[0], baseline[1], (0, 0, 255), 2)
+    cv2.line(img, ftline[0], ftline[1], (0, 0, 255), 2)
+    for i in range(len(lines)):
+        for rho,theta in lines[i]:
+            print(rho, theta)
+           # remove vertical noise 
+            if theta < 0.2 or theta > 2.94:
+                continue
+            a = np.cos(theta)
+            b = np.sin(theta)
+            x0 = a*rho
+            y0 = b*rho
+            x1 = int(x0 + 1000*(-b))
+            y1 = int(y0 + 1000*(a))
+            x2 = int(x0 - 1000*(-b))
+            y2 = int(y0 - 1000*(a))
+            lines_points.append([(x1, y1), (x2, y2)])
+            cv2.line(img,(x1, y1),(x2, y2),(0, 0, 255), 2)
+    
+    #print(lines_points)
+    # find intersection points
+    points = []
+    for i in range(len(lines_points)):
+        for j in range(len(lines_points)):
+            if i >= j:
+                continue
+            tf, r = intersection(lines_points[i][0], lines_points[i][1],
+                         lines_points[j][0], lines_points[j][1], img.shape[:2])
+            if tf == True:
+               points.append(r)
+               cv2.circle(img, r, 5, (0, 255, 0), -1)
+    points = np.array(points)
+    print(points)
+    # cluster points and find centers
+    core, lab = dbscan(points, eps=30, min_samples=20)
+    centers = []
+    for i in range(np.amax(lab) + 1):
+        count = 0
+        total = [0, 0]
+        for p in range(len(points)):
+            if lab[p] == i:
+                count += 1
+                total[0] += points[p][0]
+                total[1] += points[p][1]
+        total[0] = int(total[0] / count)
+        total[1] = int(total[1] / count)
+        centers.append(total)
+        cv2.circle(img, (total[0], total[1]), 10, (255, 0, 0), -1)
+    cv2.imwrite('out/' + str(id) + 'houghlines.jpg',img)
+
+    # order centers
+    max_x = 0
+    min_x = img.shape[1]
+    point0, point2 = -1, -1
+    for i in range(len(centers)):
+        if centers[i][0] > max_x:
+            point0 = i
+            max_x = centers[i][0]
+        if centers[i][0] < min_x:
+            point2 = i
+            min_x = centers[i][0]
+    max_y = 0
+    min_y = img.shape[0]
+    point1, point3 = -1, -1
+    for i in range(len(centers)):
+        if i == point0 or i == point2:
+            continue
+        if centers[i][1] > max_y:
+            point1 = i
+            max_y = centers[i][1]
+        if centers[i][1] < min_y:
+            point3 = i
+            min_y = centers[i][1]
+
+    # define court point and calculate the transformation matrix
+    court0, court1, court2, court3 = (190, 0), (190, 328), (0, 328), (0, 0)
+    dst_points = np.array([court0, court1, court2, court3], np.float32)
+    src_points = np.array([centers[point0], centers[point1], centers[point2], centers[point3]], np.float32)
+    M = cv2.getPerspectiveTransform(src_points, dst_points)
+    warped = cv2.warpPerspective(img, M, (500, 470))
+    cv2.imwrite('warped.jpg', warped)
+    return M
+
+def getfb(img_path, baseline=False):
+    if baseline == True:
+        _range = (1.9, 2)
+    else:
+        _range = (2, 3)
+
+    img = cv2.imread(img_path)
+    print(img_path)
+    # mask floor color
+    img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    lower = np.array([95, 50, 50], dtype ="uint8")
+    upper = np.array([115, 255, 255], dtype="uint8")
+    mask = cv2.inRange(img_hsv, lower, upper)
+
+    # erosion and dilation
+    kernel = np.ones((9, 9), np.uint8)
+    mask = cv2.erode(mask, kernel, iterations=3)
+    mask = cv2.dilate(mask, kernel, iterations=3)
+   
+
+    # get edge
+    edges = cv2.Canny(mask,50,150,apertureSize = 3)
+    
+
+    #filter range
+    #fil = np.zeros(img.shape[:2], np.uint8)
+    #for i in range(int(img.shape[0] / 4), int(img.shape[0] * 3 / 4)):
+    #    for j in range(int(img.shape[1] * 2 / 3)):
+    #        fil[i, j] = 255
+    #edges = cv2.bitwise_and(edges, edges, mask=fil)
+
+    # calculate Hough lines
+
+
+    lines = cv2.HoughLines(edges,1,np.pi/180, 50)
+    
+    lines_points = []
+
+    for i in range(len(lines)):
+        for rho,theta in lines[i]:
+            if theta < _range[0] or theta > _range[1]:
+                continue
+            a = np.cos(theta)
+            b = np.sin(theta)
+            x0 = a*rho
+            y0 = b*rho
+            x1 = int(x0 + 1000*(-b))
+            y1 = int(y0 + 1000*(a))
+            x2 = int(x0 - 1000*(-b))
+            y2 = int(y0 - 1000*(a))
+            print("x1", x1, "y1", y1, "x2", x2, "y2", y2)
+            print("rho", rho, "theta", theta)
+            #m1, b1 = polar2cartesian(rho, theta)
+            #print("m1", m1, "b1", b1)
+            if x1 < 0 and y1 < 0:
+                m = (y2 - y1)/(x2 - x1)
+                b = y2 - (m * x2)
+                print("equation: y =", m, "x + ", b)
+                m = -m
+                b = -b
+                x1 = int((0-b)/m)
+                y1 = 0
+                x1 = x1 + 500
+                y1 = y1 + 230
+                x2 = x2 + 500
+                y2 = y2 + 230
+                print("x1", x1, "y1", y1, "x2", x2, "y2", y2)
+            return True, [(x1, y1), (x2, y2)]
+    return False, [(-1, -1), (-1, -1)]
+ 
+if __name__ == '__main__':
+
+    file = '../out/output_0{0:03d}.jpg'
+    # get baseline and sideline
+    print("1")
+    for i in list(range(1, 21)) + list(range(23, 31)) + list(range(33, 45)) + list(range(47, 100)):
+        #print('bucks_vs_suns/output_0{0:03d}.jpg'.format(i))
+        tf, baseline = getfb(file.format(i), baseline=True)
+        if tf == True:
+            break
+        else:
+            baseline = -1
+    #print(tf, baseline)
+    print("2")
+    for i in list(range(1, 21)) + list(range(23, 31)) + list(range(33, 45)) + list(range(47, 100)):
+        tf, ftline = getfb(file.format(i), baseline=False)
+        if tf == True:
+            break
+        else:
+            ftline = -1
+    if baseline == -1 or ftline == -1:
+        print('I give up!')
+        exit()
+    m_arr = np.array([])
+    print("3)")
+    #print(file)
+    for i in list(range(1, 21)) + list(range(23, 31)) + list(range(33, 45)) + list(range(47, 100)):
+        #print('bucks_vs_suns/output_0{0:03d}.jpg'.format(i))
+        if getfb(file.format(i), baseline=True) == True:
+            _, baseline = getfb(file.format(i), baseline=True) 
+        if getfb(file.format(i), baseline=False) == True:
+            _, ftline = getfb(file.format(i), baseline=False)  
+        print("here")
+        print(baseline, ftline)
+        M = getMatrix(file.format(i), i, baseline, ftline)
+        np.append(m_arr, M)
+    np.save('matrices/transform.npy', m_arr)
+
