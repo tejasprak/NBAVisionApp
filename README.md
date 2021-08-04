@@ -17,5 +17,19 @@
 ### 2. detection - using yolov4-deepsort to detect players in frame (./run.sh)
 ### 3. player tracking and smoothing, coordinate extraction (yolov4-deepsort)
 ### 4. classify - based on team (team_classification/classify.py, query.py)
-### 5. map frame on board (WIP)
+### 5. map frame on board (WIP)pre
 ### 6. postprocessing to export video using ffmpeg 
+
+## Demo:
+
+Original:
+<img src="https://github.com/tejasprak/NBAVisionApp/blob/master/assets/original.jpg" width="50%" height="50%"/>  
+
+Object Detection:
+<img src="https://github.com/tejasprak/NBAVisionApp/blob/master/assets/detected.png" width="50%" height="50%"/> 
+
+Line Detection & DBSCAN
+<img src="https://github.com/tejasprak/NBAVisionApp/blob/master/assets/houghlines.jpg" width="50%" height="50%"/> 
+
+Visualization & Tracking
+<img src="https://github.com/tejasprak/NBAVisionApp/blob/master/assets/final.gif" width="50%" height="50%"/> 
