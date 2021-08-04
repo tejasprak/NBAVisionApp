@@ -22,14 +22,18 @@
 
 ## Demo:
 
-Original:
+Original: 
+
 <img src="https://raw.githubusercontent.com/tejasprak/NBAVisionApp/main/assets/original.jpg" width="50%" height="50%"/>  
 
 Object Detection:
+
 <img src="https://raw.githubusercontent.com/tejasprak/NBAVisionApp/main/assets/detected.png" width="50%" height="50%"/> 
 
-Line Detection & DBSCAN
+Line Detection & DBSCAN 
+
 <img src="https://raw.githubusercontent.com/tejasprak/NBAVisionApp/main/assets/houghlines.jpg" width="50%" height="50%"/> 
 
-Visualization & Tracking
+Visualization & Tracking 
+
 <img src="https://raw.githubusercontent.com/tejasprak/NBAVisionApp/main/assets/final.gif" width="50%" height="50%"/> 
